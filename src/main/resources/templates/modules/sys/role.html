@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity5">
+<head>
+    <title>角色管理</title>
+    <th:block th:replace="header::common"/>
+</head>
+<body>
+<div>
+    <table class="layui-hide" id="tm" lay-filter="tm"></table>
+</div>
+
+<!-- 新增or修改 -->
+<div id="saveOrUpdate" style="display: none;padding: 50px">
+    <div class="layui-form" lay-filter="opt-form">
+        <input type="hidden" name="id"/>
+        <div class="layui-form-item">
+            <label class="layui-form-label">角色名称</label>
+            <div class="layui-input-inline">
+                <input type="text" name="roleName" placeholder="角色名称" lay-verify="required" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">备注</label>
+            <div class="layui-input-inline">
+                <input type="text" name="remark" placeholder="备注" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">功能权限</label>
+            <div class="layui-input-block">
+                <div id="mTree"></div>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <div class="layui-input-block">
+                <button class="layui-btn" lay-submit lay-filter="submit">立即提交</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/html" id="toolbar">
+    <div class="layui-btn-container">
+        <sec:authorize access="hasRole('sys:role:save')">
+            <button class="layui-btn layui-btn-sm" lay-event="add">新增</button>
+        </sec:authorize>
+        <sec:authorize access="hasRole('sys:role:update')">
+            <button class="layui-btn layui-btn-sm" lay-event="edit">修改</button>
+        </sec:authorize>
+        <sec:authorize access="hasRole('sys:role:delete')">
+            <button class="layui-btn layui-btn-danger layui-btn-sm" lay-event="del">删除</button>
+        </sec:authorize>
+    </div>
+</script>
+<script th:inline="none">
+    layui.use(['table', 'form', 'tree'], function () {
+        const table = layui.table,
+            form = layui.form,
+            tree = layui.tree;
+        ;
+        table.render({
+            elem: '#tm'
+            , url: '../../sys/role/list'
+            , page: true
+            , toolbar: '#toolbar' //开启头部工具栏，并为其绑定左侧模板
+            , defaultToolbar: []
+            , cols: [[
+                {type: 'checkbox', fixed: 'left'}
+                , {field: 'id', title: '角色ID'}
+                , {field: 'roleName', title: '角色名称'}
+                , {field: 'remark', title: '备注'}
+                , {field: 'createTime', title: '创建时间'}
+            ]]
+        });
+
+        //头工具栏事件
+        table.on('toolbar(tm)', function (obj) {
+            const checkStatus = table.checkStatus(obj.config.id);
+            const data = checkStatus.data;
+            switch (obj.event) {
+                case 'add':
+                    getMenuTree();
+                    openLayer("新增", 'saveOrUpdate');
+                    form.val("opt-form", {
+                        "id": null, "roleName": null, "remark": null
+                    });
+                    break;
+                case 'edit':
+                    if (checkSelectRow(data.length)) {
+                        return;
+                    }
+                    getMenuTree(data[0].id);
+                    openLayer("修改", 'saveOrUpdate');
+                    form.val("opt-form", data[0]);
+                    break;
+                case 'del':
+                    const ids = checkSelectRows(data);
+                    if (ids.length == 0) {
+                        return;
+                    }
+                    layer.confirm('真的删除么', function (index) {
+                        $.ajax({
+                            type: "post",
+                            url: "../../sys/role/delete",
+                            contentType: "application/json",
+                            data: JSON.stringify(ids),
+                            async: false,
+                            success: function (r) {
+                                if (r.code == 0) {
+                                    layer.msg('删除成功', {icon: 6})
+                                    table.reload('tm');
+                                } else {
+                                    layer.msg(r.msg, {icon: 5})
+                                }
+                            }
+                        })
+                        layer.close(index);
+                    });
+                    break;
+            }
+        });
+
+        // 保存修改
+        form.on('submit(submit)', function (data) {
+            const role = data.field;
+            const menus = tree.getChecked('mTree');
+            role.menuList = menus;
+            $.ajax({
+                type: "post",
+                url: "../../sys/role/saveOrUpdate",
+                contentType: "application/json",
+                data: JSON.stringify(role),
+                async: false,
+                success: function (r) {
+                    if (r.code == 0) {
+                        layer.msg('保存成功', {icon: 6})
+                        table.reload('tm');
+                        layer.close(showIdx);
+                    } else {
+                        layer.msg(r.msg, {icon: 5})
+                    }
+                }
+            })
+            return false;
+        });
+
+        // 加载功能权限
+        function getMenuTree(roleId) {
+            let url = "../../sys/role/select";
+            if (roleId) {
+                url += "?roleId=" + roleId;
+            }
+            $.ajax({
+                type: "get",
+                url: url,
+                async: false,
+                success: function (r) {
+                    if (r.code == 0) {
+                        tree.render({
+                            elem: '#mTree'
+                            , id: 'mTree'
+                            , data: r.menuList
+                            , showLine: false
+                            , showCheckbox: true
+                        });
+                    } else {
+                        layer.msg(r.msg, {icon: 5})
+                    }
+                }
+            });
+        }
+    });
+</script>
+</body>
+</html>

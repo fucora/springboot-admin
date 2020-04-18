@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity5">
+<head>
+    <title>管理员列表</title>
+    <th:block th:replace="header::common"/>
+</head>
+<body>
+<div>
+    <table class="layui-hide" id="tm" lay-filter="tm"></table>
+</div>
+
+<!-- 新增or修改 -->
+<div id="saveOrUpdate" style="display: none;padding: 50px">
+    <div class="layui-form" lay-filter="opt-form">
+        <input type="hidden" name="id"/>
+        <div class="layui-form-item">
+            <label class="layui-form-label">用户名</label>
+            <div class="layui-input-inline">
+                <input type="text" name="username" placeholder="用户名" lay-verify="required" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">密码</label>
+            <div class="layui-input-inline">
+                <input type="password" name="password" placeholder="密码(不修改密码可以不填)" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">邮箱</label>
+            <div class="layui-input-inline">
+                <input type="email" name="email" placeholder="邮箱" lay-verify="required|email" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">手机号</label>
+            <div class="layui-input-inline">
+                <input type="tel" name="mobile" placeholder="手机号" lay-verify="phone" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">角色</label>
+            <div class="layui-input-block" id="roleBox"></div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">状态</label>
+            <div class="layui-input-block">
+                <input type="radio" name="status" value="true" title="正常" checked>
+                <input type="radio" name="status" value="false" title="禁用">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <div class="layui-input-block">
+                <button class="layui-btn" lay-submit lay-filter="submit">立即提交</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/html" id="toolbar">
+    <div class="layui-btn-container">
+        <sec:authorize access="hasRole('sys:user:save')">
+            <button class="layui-btn layui-btn-sm" lay-event="add">新增</button>
+        </sec:authorize>
+        <sec:authorize access="hasRole('sys:user:update')">
+            <button class="layui-btn layui-btn-sm" lay-event="edit">修改</button>
+        </sec:authorize>
+        <sec:authorize access="hasRole('sys:user:delete')">
+            <button class="layui-btn layui-btn-danger layui-btn-sm" lay-event="del">删除</button>
+        </sec:authorize>
+    </div>
+</script>
+
+<script th:inline="none">
+    layui.use(['table', 'form'], function () {
+        const table = layui.table,
+            form = layui.form;
+        table.render({
+            elem: '#tm'
+            , url: '../../sys/user/list'
+            , page: true
+            , toolbar: '#toolbar' //开启头部工具栏，并为其绑定左侧模板
+            , defaultToolbar: []
+            , cols: [[
+                {type: 'checkbox', fixed: 'left'}
+                , {field: 'id', title: '用户ID'}
+                , {field: 'username', title: '用户名'}
+                , {field: 'email', title: '邮箱'}
+                , {field: 'mobile', title: '手机号'}
+                , {
+                    field: 'status', title: '状态', templet: function (d) {
+                        return d.status === 0 ?
+                            '<button type="button" class="layui-btn layui-btn-xs layui-btn-danger" style="cursor:default">禁用</button>' :
+                            '<button type="button" class="layui-btn layui-btn-xs" style="cursor:default">正常</button>';
+                    }
+                }
+                , {field: 'createTime', title: '创建时间'}
+            ]]
+        });
+
+        //头工具栏事件
+        table.on('toolbar(tm)', function (obj) {
+            const checkStatus = table.checkStatus(obj.config.id);
+            const data = checkStatus.data;
+            switch (obj.event) {
+                case 'add':
+                    showMenuBox();
+                    openLayer("新增", 'saveOrUpdate');
+                    form.val("opt-form", {
+                        "id": null, "username": null, "password": null
+                        , "email": null, "mobile": null
+                    });
+                    break;
+                case 'edit':
+                    if (checkSelectRow(data.length)) {
+                        return;
+                    }
+                    showMenuBox(data[0].roleIdList);
+                    openLayer("修改", 'saveOrUpdate');
+                    form.val("opt-form", data[0]);
+                    break;
+                case 'del':
+                    const ids = checkSelectRows(data);
+                    if (ids.length == 0) {
+                        return;
+                    }
+                    layer.confirm('真的删除么', function (index) {
+                        $.ajax({
+                            type: "post",
+                            url: "../../sys/user/delete",
+                            contentType: "application/json",
+                            data: JSON.stringify(ids),
+                            async: false,
+                            success: function (r) {
+                                if (r.code == 0) {
+                                    layer.msg('删除成功', {icon: 6})
+                                    table.reload('tm');
+                                } else {
+                                    layer.msg(r.msg, {icon: 5})
+                                }
+                            }
+                        })
+                        layer.close(index);
+                    });
+                    break;
+            }
+        });
+
+        // 保存修改
+        form.on('submit(submit)', function (data) {
+            const user = data.field;
+            const roleIdList = [];
+            $("input:checkbox[name='roleId']:checked").each(function (i) {
+                roleIdList[i] = $(this).val();
+            });
+            user.roleIdList = roleIdList;
+            $.ajax({
+                type: "post",
+                url: "../../sys/user/saveOrUpdate",
+                contentType: "application/json",
+                data: JSON.stringify(user),
+                async: false,
+                success: function (r) {
+                    if (r.code == 0) {
+                        layer.msg('保存成功', {icon: 6})
+                        table.reload('tm');
+                        layer.close(showIdx);
+                    } else {
+                        layer.msg(r.msg, {icon: 5})
+                    }
+                }
+            })
+            return false;
+        });
+
+        function showMenuBox(roleIdList) {
+            $.ajax({
+                type: "get",
+                url: "../../sys/role/all",
+                async: false,
+                success: function (r) {
+                    if (r.code == 0) {
+                        const roles = r.data;
+                        let html = "";
+                        for (const role of roles) {
+                            html += '<input type="checkbox" name="roleId" value="' + role.id + '" lay-skin="primary" title="' + role.roleName + '" lay-filter="f-role"';
+                            if (roleIdList) {
+                                for (const roleId of roleIdList) {
+                                    if (role.id == roleId) {
+                                        html += ' checked="checked" '
+                                    }
+                                }
+                            }
+                            html += '>';
+                        }
+                        $("#roleBox").html('').html(html);
+                        form.render('checkbox', 'f-role');
+                    } else {
+                        layer.msg(r.msg, {icon: 5})
+                    }
+                }
+            })
+        }
+    });
+</script>
+</body>
+</html>

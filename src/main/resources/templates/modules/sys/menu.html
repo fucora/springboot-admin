@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity5">
+<head>
+    <title>菜单管理</title>
+    <th:block th:replace="header::common"/>
+</head>
+<body>
+<div>
+    <div class="layui-btn-container" style="display: inline-block;">
+        <button id="expandAll" class="layui-btn layui-btn-sm layui-btn-primary">
+            <i class="layui-icon">&#xe668;</i>展开全部
+        </button>
+        <button id="foldAll" class="layui-btn layui-btn-sm layui-btn-primary">
+            <i class="layui-icon">&#xe66b;</i>折叠全部
+        </button>
+        <sec:authorize access="hasRole('sys:menu:save')">
+            <button id="add" class="layui-btn layui-btn-sm layui-btn-primary">
+                <i class="layui-icon">&#xe624;</i>新增
+            </button>
+        </sec:authorize>
+    </div>
+    <table class="layui-hide" id="tm" lay-filter="tm"></table>
+</div>
+
+<!-- 新增or修改 -->
+<div id="saveOrUpdate" style="display: none;padding: 50px">
+    <div class="layui-form" lay-filter="opt-form">
+        <input type="hidden" name="id"/>
+        <div class="layui-form-item">
+            <label class="layui-form-label">类型</label>
+            <div class="layui-input-block">
+                <input type="radio" value="0" name="type" title="目录" lay-filter="type">
+                <input type="radio" value="1" name="type" title="菜单" lay-filter="type">
+                <input type="radio" value="2" name="type" title="按钮" lay-filter="type">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">菜单名称</label>
+            <div class="layui-input-inline">
+                <input type="text" name="name" placeholder="菜单名称或按钮名称" lay-verify="required" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">上级菜单</label>
+            <input type="hidden" id="pid" name="pid">
+            <div class="layui-input-inline">
+                <input type="text" id="menuTree" name="parentName" style="cursor:pointer;" readonly="readonly"
+                       placeholder="一级菜单" class="layui-input">
+            </div>
+        </div>
+        <div id="m-url" class="layui-form-item">
+            <label class="layui-form-label">菜单URL</label>
+            <div class="layui-input-inline">
+                <input type="text" name="url" placeholder="菜单URL" class="layui-input">
+            </div>
+        </div>
+        <div id="m-perms" class="layui-form-item">
+            <label class="layui-form-label">授权标识</label>
+            <div class="layui-input-inline">
+                <input type="text" name="perms" placeholder="多个用逗号分隔，如：user:list,user:create"
+                       class="layui-input">
+            </div>
+        </div>
+        <div id="m-orderNum" class="layui-form-item">
+            <label class="layui-form-label">排序号</label>
+            <div class="layui-input-inline">
+                <input type="number" name="orderNum" placeholder="排序号" class="layui-input">
+            </div>
+        </div>
+        <div id="m-icon" class="layui-form-item">
+            <label class="layui-form-label">菜单图标</label>
+            <div class="layui-input-inline">
+                <input type="text" name="icon" placeholder="菜单图标" class="layui-input">
+            </div>
+            <div class="layui-form-mid layui-word-aux">获取图标：http://www.fontawesome.com.cn/faicons/</div>
+        </div>
+        <div class="layui-form-item">
+            <div class="layui-input-block">
+                <button class="layui-btn" lay-submit lay-filter="submit">立即提交</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="selectMenu" style="display: none;padding: 50px">
+    <div id="mTree"></div>
+</div>
+
+<script type="text/html" id="toolbar">
+    <div class="layui-btn-container">
+        <sec:authorize access="hasRole('sys:menu:update')">
+            <button class="layui-btn layui-btn-xs" lay-event="edit">修改</button>
+        </sec:authorize>
+        <sec:authorize access="hasRole('sys:menu:delete')">
+            <button class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</button>
+        </sec:authorize>
+    </div>
+</script>
+
+<script th:inline="none">
+    let insMenuTree;
+    layui.config({
+        base: '../../statics/plugins/'
+    }).extend({
+        treeTable: 'treeTable/treeTable'
+    }).use(['treeTable', 'form', 'tree'], function () {
+        const treeTable = layui.treeTable,
+            form = layui.form,
+            tree = layui.tree;
+        const insTb = treeTable.render({
+            elem: '#tm',
+            toolbar: '#toolbar',
+            tree: {
+                iconIndex: 1,
+                isPidData: true
+            },
+            cols: [
+                {type: 'numbers'},
+                {field: 'name', title: '菜单名称'},
+                {field: 'url', title: '菜单URL'},
+                {field: 'perms', title: '权限标识'},
+                {
+                    field: 'type', title: '类型', templet: function (d) {
+                        let txt = '-';
+                        switch (d.type) {
+                            case 0:
+                                txt = '<span class="layui-badge layui-bg-blue">目录</span>';
+                                break;
+                            case 1:
+                                txt = '<span class="layui-badge-rim">菜单</span>';
+                                break;
+                            case 2:
+                                txt = '<span class="layui-badge layui-bg-gray">按钮</span>';
+                                break;
+                        }
+                        return txt;
+                    }
+                },
+                {field: 'orderNum', title: '排序'},
+                {align: 'center', toolbar: '#toolbar', title: '操作', width: 120}
+            ],
+            reqData: function (data, callback) {
+                $.get("../../sys/menu/list", function (r) {
+                    callback(r);
+                });
+            }
+        });
+        treeTable.on('tool(tm)', function (obj) {
+            switch (obj.event) {
+                case 'edit':
+                    typeShow(obj.data.type);
+                    openLayer("修改", 'saveOrUpdate');
+                    form.val("opt-form", obj.data);
+                    break;
+                case 'del':
+                    layer.confirm('真的删除么', function (index) {
+                        $.ajax({
+                            type: "post",
+                            url: "../../sys/menu/delete",
+                            contentType: "application/json",
+                            data: JSON.stringify([obj.data.id]),
+                            async: false,
+                            success: function (r) {
+                                if (r.code == 0) {
+                                    layer.msg('删除成功', {icon: 6})
+                                    insTb.reload('tm');
+                                } else {
+                                    layer.msg(r.msg, {icon: 5})
+                                }
+                            }
+                        })
+                        layer.close(index);
+                    });
+                    break;
+            }
+        });
+
+        $("#menuTree").click(function () {
+            getMenuTree();
+            insMenuTree = layer.open({
+                type: 1,
+                offset: '50px',
+                skin: 'layui-layer-molv',
+                title: "选择菜单",
+                area: ['300px', '450px'],
+                shade: 0,
+                shadeClose: false,
+                content: $("#selectMenu")
+            });
+        })
+
+        // 保存修改
+        form.on('submit(submit)', function (data) {
+            $.ajax({
+                type: "post",
+                url: "../../sys/menu/saveOrUpdate",
+                contentType: "application/json",
+                data: JSON.stringify(data.field),
+                async: false,
+                success: function (r) {
+                    if (r.code == 0) {
+                        layer.msg('保存成功', {icon: 6})
+                        insTb.reload('tm');
+                        layer.close(showIdx);
+                    } else {
+                        layer.msg(r.msg, {icon: 5})
+                    }
+                }
+            })
+            return false;
+        });
+
+        form.on('radio(type)', function (data) {
+            typeShow(data.value);
+        });
+
+        function typeShow(type) {
+            if (type == 1) {
+                $("#m-url").show();
+            } else {
+                $("#m-url").hide();
+            }
+            if (type == 1 || type == 2) {
+                $("#m-perms").show();
+            } else {
+                $("#m-perms").hide();
+            }
+            if (type != 2) {
+                $("#m-orderNum").show();
+                $("#m-icon").show();
+            } else {
+                $("#m-orderNum").hide();
+                $("#m-icon").hide();
+            }
+        }
+
+        $("#add").click(function () {
+            typeShow(1);
+            openLayer("新增", 'saveOrUpdate');
+            form.val("opt-form", {
+                "id": null, "name": null, "pid": 0, "parentName": "一级菜单", "type": 1, "url": null, "perms": null,
+                "orderNum": 0, "icon": null
+            });
+        });
+
+        function getMenuTree() {
+            $.ajax({
+                type: "get",
+                url: "../../sys/menu/select",
+                async: false,
+                success: function (r) {
+                    if (r.code == 0) {
+                        tree.render({
+                            elem: '#mTree'
+                            , data: r.menuList
+                            , onlyIconControl: true
+                            , click: function (obj) {
+                                $("#pid").val(obj.data.id);
+                                $("#menuTree").val(obj.data.title);
+                                layer.close(insMenuTree);
+                            }
+                        });
+                    } else {
+                        layer.msg(r.msg, {icon: 5})
+                    }
+                }
+            });
+        }
+
+        // 全部展开
+        $("#expandAll").click(function () {
+            insTb.expandAll();
+        });
+        // 全部折叠
+        $("#foldAll").click(function () {
+            insTb.foldAll();
+        })
+    });
+</script>
+</body>
+</html>

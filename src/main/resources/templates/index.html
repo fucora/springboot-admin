@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity5">
+<head>
+    <title>后台管理系统</title>
+    <th:block th:replace="header::common" />
+    <style>
+        .admin-home i.layui-icon {
+            display: none;
+        }
+
+        iframe {
+            height: 100%;
+            width: 100%;
+        }
+
+        .layui-form-item .layui-input-inline {
+            float: left;
+            width: 350px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="layui-layout layui-layout-admin" id="admin-content">
+    <div class="layui-header">
+        <div class="layui-logo">后台管理系统</div>
+        <div class="larry-side-menu">
+            <i class="fa fa-bars" aria-hidden="true"></i>
+        </div>
+        <!-- 头部区域 -->
+        <ul class="layui-nav layui-layout-right">
+            <li class="layui-nav-item">
+                <a href="javascript:;" onclick="updatePassword();"><i class="fa fa-lock"></i> &nbsp;修改密码</a>
+            </li>
+            <li class="layui-nav-item">
+                <a href="logout"><i class="fa fa-sign-out"></i> &nbsp;退出系统</a>
+            </li>
+        </ul>
+    </div>
+
+    <!-- 左侧菜单 -->
+    <div class="layui-side layui-bg-black" id="menu-side">
+        <div class="layui-side-scroll">
+            <!-- 左侧导航区域（可配合layui已有的垂直导航） -->
+            <ul class="layui-nav layui-nav-tree" id="menu-tree"></ul>
+        </div>
+    </div>
+
+    <!-- 右侧主体内容 -->
+    <div class="layui-body" style="bottom: 0;border-left: solid 2px #1AA094;">
+        <div class="layui-tab" id="main-tab" lay-filter="main-tab" lay-allowClose="true">
+            <ul class="layui-tab-title">
+                <li class="layui-this admin-home"><i class="fa fa-home"></i> <span>控制台</span></li>
+            </ul>
+            <div class="layui-tab-content">
+                <div class="layui-tab-item layui-show">
+                    <iframe frameborder="0" th:replace="main::html"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="layui-footer">
+        Copyright &copy; 2020 <a href="https://www.mm.com" target="_blank">mm.com</a> All Rights
+        Reserved
+    </div>
+
+    <!-- 修改密码 -->
+    <div id="passwordLayer" style="display: none;">
+        <div class="layui-form">
+            <div class="layui-form-item">
+                <label class="layui-form-label">账号</label>
+                <label class="layui-form-label" id="username"></label>
+            </div>
+            <div class="layui-form-item">
+                <label class="layui-form-label">原密码</label>
+                <div class="layui-input-inline">
+                    <input type="password" id="password" placeholder="原密码" lay-verify="required" autocomplete="off"
+                           class="layui-input">
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label class="layui-form-label">新密码</label>
+                <div class="layui-input-inline">
+                    <input type="text" id="newPassword" placeholder="新密码" lay-verify="required" autocomplete="off"
+                           class="layui-input">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script th:inline="none">
+    let menuHtml = '';
+    $(function () {
+        $(window).on('resize', function () {
+            const $content = $('#main-tab .layui-tab-content');
+            $content.height($(this).height() - 170);
+            $content.find('iframe').each(function () {
+                $(this).height($content.height());
+            });
+        }).resize();
+
+        // 获取菜单
+        $.ajax({
+            method: 'get',
+            url: "sys/menu/nav",
+            async: false,
+            success: function (r) {
+                if (r.code == 0) {
+                    getMenuHtml(r.menuList);
+                    $("#menu-tree").html('').html(menuHtml);
+                } else {
+                    layer.msg(r.msg, {icon: 6})
+                }
+            }
+        });
+
+        // 获取菜单html
+        function getMenuHtml(menuList) {
+            for (const m of menuList) {
+                menuHtml += '<li class="layui-nav-item" >';
+                if (m.type == 0) {
+                    menuHtml += '<a href="javascript:;">';
+                    if (m.icon != null) {
+                        menuHtml += '<i class="' + m.icon + '"></i> '
+                    }
+                    menuHtml += '<span>' + m.name + '</span></a>';
+                    menuHtml += '<dl class="layui-nav-child">';
+                    for (const cm of m.list) {
+                        if (cm.type == 1) {
+                            menuHtml += '<dd><a href="javascript:;" class="site-url" data-id="' + cm.id
+                                + '" data-url="' + cm.url + '" data-title="' + cm.name + '" data-icon="'
+                                + cm.icon + '">';
+
+                            if (cm.icon != null) {
+                                menuHtml += '<i class="' + cm.icon + '"></i> '
+                            }
+                            menuHtml +='<span>' + cm.name + '</span></a></dd>';
+                        }
+                        if (cm.type == 0) {
+                            getMenuHtml(cm.list);
+                        }
+                    }
+                    menuHtml += '</dl>';
+                }
+                if (m.type == 1) {
+                    menuHtml += '<a href="javascript:;" class="site-url" data-id="' + m.id
+                        + '" data-url="' + m.url + '" data-title="' + m.name + '" data-icon="'
+                        + m.icon + '">';
+
+                    if (m.icon != null) {
+                        menuHtml += '<i class="' + m.icon + '"></i> '
+                    }
+                    menuHtml +='<span>' + m.name + '</span></a>';
+                }
+                menuHtml += '</li>';
+            }
+        }
+    })
+
+    layui.use('element', function () {
+        const element = layui.element;
+        const active = {
+            tabAdd: function (url, id, name, icon) {
+                let title = "";
+                // 若icon有定义
+                if (icon !== undefined) {
+                    if (icon.indexOf('fa-') !== -1) {
+                        title += '<i class="' + icon + '"></i> ';
+                    } else {
+                        title += '<i class="layui-icon ">' + icon + '</i> ';
+                    }
+                }
+                title += '<span>' + name + '</span>';
+                element.tabAdd('main-tab', {
+                    title: title,
+                    content: '<iframe data-frameid="' + id + '" frameborder="0" src="' + url + '"></iframe>',
+                    id: id
+                });
+                iframeWH();
+            },
+            tabChange: function (id) {
+                element.tabChange('main-tab', id);
+            },
+            tabDelete: function (id) {
+                element.tabDelete('main-tab', id);
+            },
+            tabDeleteAll: function (ids) {
+                $.each(ids, function (index, item) {
+                    element.tabDelete('main-tab', item);
+                });
+            }
+        };
+        $(".site-url").on('click', function () {
+            var nav = $(this);
+            var length = $("ul.layui-tab-title li").length;
+            if (length <= 0) {
+                active.tabAdd(nav.attr("data-url"), nav.attr("data-id"), nav.attr("data-title"), nav.attr("data-icon"));
+            } else {
+                let isData = false;
+                $.each($("ul.layui-tab-title li"), function () {
+                    if ($(this).attr("lay-id") == nav.attr("data-id")) {
+                        isData = true;
+                    }
+                });
+                if (isData == false) {
+                    active.tabAdd(nav.attr("data-url"), nav.attr("data-id"), nav.attr("data-title"), nav.attr("data-icon"));
+                }
+                active.tabChange(nav.attr("data-id"));
+            }
+        });
+
+        element.on('tabDelete(main-tab)', function (data) {
+            active.tabDelete(data.index);
+        });
+
+        function iframeWH() {
+            const H = $(window).height() - 170;
+            $("iframe").css("height", H + "px");
+        }
+
+        // 修改密码
+        window.updatePassword = function () {
+            $.ajax({
+                method: 'get',
+                url: "sys/user/info",
+                async: false,
+                success: function (r) {
+                    if (r.code == 0) {
+                        $("#username").text(r.user.username);
+                    } else {
+                        layer.msg(r.msg, {icon: 6})
+                    }
+                }
+            });
+            layer.open({
+                type: 1,
+                skin: 'layui-layer-molv',
+                title: "修改密码",
+                area: ['550px', '270px'],
+                shadeClose: false,
+                content: jQuery("#passwordLayer"),
+                btn: ['修改', '取消'],
+                btn1: function (index) {
+                    const data = "password=" + $("#password").val() + "&newPassword=" + $("#newPassword").val();
+                    $.ajax({
+                        method: 'post',
+                        url: "sys/user/password",
+                        data: data,
+                        async: false,
+                        success: function (r) {
+                            if (r.code == 0) {
+                                layer.close(index);
+                                layer.alert('修改成功', function (index) {
+                                    location.reload();
+                                });
+                            } else {
+                                layer.alert(r.msg);
+                            }
+                        }
+                    });
+                }
+            });
+        }
+    });
+</script>
+</body>
+</html>

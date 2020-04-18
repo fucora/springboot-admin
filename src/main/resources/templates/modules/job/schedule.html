@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity5">
+<head>
+    <title>定时任务</title>
+    <th:block th:replace="header::common"/>
+</head>
+<body>
+<div>
+    <table class="layui-hide" id="tm" lay-filter="tm"></table>
+</div>
+
+<div id="jobLogTab" style="display: none;">
+    <table class="layui-hide" id="jobLog" lay-filter="jobLog"></table>
+</div>
+<!-- 新增or修改 -->
+<div id="saveOrUpdate" style="display: none;padding: 50px">
+    <div class="layui-form" lay-filter="opt-form">
+        <input type="hidden" name="id"/>
+        <input type="hidden" name="status"/>
+        <div class="layui-form-item">
+            <label class="layui-form-label">bean名称</label>
+            <div class="layui-input-inline">
+                <input type="text" name="beanName" placeholder="spring bean名称，如：testTask" lay-verify="required"
+                       class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">参数</label>
+            <div class="layui-input-inline">
+                <input type="text" name="params" placeholder="参数" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">cron表达式</label>
+            <div class="layui-input-inline">
+                <input type="text" name="cronExpression" placeholder="如：0 0 12 * * ?" lay-verify="required"
+                       class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">备注</label>
+            <div class="layui-input-inline">
+                <input type="text" name="remark" placeholder="备注" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <div class="layui-input-block">
+                <button class="layui-btn" lay-submit lay-filter="submit">立即提交</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/html" id="toolbar">
+    <div class="layui-btn-container">
+        <sec:authorize access="hasRole('sys:schedule:save')">
+            <button class="layui-btn layui-btn-sm" lay-event="add">新增</button>
+        </sec:authorize>
+        <sec:authorize access="hasRole('sys:schedule:update')">
+            <button class="layui-btn layui-btn-sm" lay-event="edit">修改</button>
+        </sec:authorize>
+        <sec:authorize access="hasRole('sys:schedule:delete')">
+            <button class="layui-btn layui-btn-danger layui-btn-sm" lay-event="del">删除</button>
+        </sec:authorize>
+        <sec:authorize access="hasRole('sys:schedule:pause')">
+            <button class="layui-btn layui-btn-sm" lay-event="pause">暂停</button>
+        </sec:authorize>
+        <sec:authorize access="hasRole('sys:schedule:resume')">
+            <button class="layui-btn layui-btn-sm" lay-event="resume">恢复</button>
+        </sec:authorize>
+        <sec:authorize access="hasRole('sys:schedule:run')">
+            <button class="layui-btn layui-btn-sm" lay-event="run">立即执行</button>
+        </sec:authorize>
+        <sec:authorize access="hasRole('sys:schedule:log')">
+            <button class="layui-btn layui-btn-sm" lay-event="log">日志列表</button>
+        </sec:authorize>
+    </div>
+</script>
+
+<script th:inline="none">
+    layui.use(['table', 'form'], function () {
+        const table = layui.table,
+            form = layui.form;
+        table.render({
+            elem: '#tm'
+            , url: '../../sys/schedule/list'
+            , page: true
+            , toolbar: '#toolbar' //开启头部工具栏，并为其绑定左侧模板
+            , defaultToolbar: []
+            , cols: [[
+                {type: 'checkbox', fixed: 'left'}
+                , {field: 'id', title: '任务ID'}
+                , {field: 'beanName', title: 'bean名称'}
+                , {field: 'params', title: '参数'}
+                , {field: 'cronExpression', title: 'cron表达式'}
+                , {field: 'remark', title: '备注'}
+                , {
+                    field: 'status', title: '状态', templet: function (d) {
+                        return d.status === 0 ?
+                            '<button type="button" class="layui-btn layui-btn-xs layui-btn-warm" style="cursor:default">暂停</button>' :
+                            '<button type="button" class="layui-btn layui-btn-xs" style="cursor:default">正常</button>';
+                    }
+                }
+                , {field: 'createTime', title: '创建时间'}
+            ]]
+        });
+
+        //头工具栏事件
+        table.on('toolbar(tm)', function (obj) {
+            const checkStatus = table.checkStatus(obj.config.id);
+            const data = checkStatus.data;
+            let ids;
+            switch (obj.event) {
+                case 'add':
+                    openLayer("新增", 'saveOrUpdate');
+                    form.val("opt-form", {
+                        "id": null, "beanName": null, "params": null
+                        , "cronExpression": null, "remark": null
+                    });
+                    break;
+                case 'edit':
+                    if (checkSelectRow(data.length)) {
+                        return;
+                    }
+                    openLayer("修改", 'saveOrUpdate');
+                    form.val("opt-form", data[0]);
+                    break;
+                case 'del':
+                    ids = checkSelectRows(data);
+                    if (ids.length == 0) {
+                        return;
+                    }
+                    layer.confirm('真的删除么', function (index) {
+                        $.ajax({
+                            type: "post",
+                            url: "../../sys/schedule/delete",
+                            contentType: "application/json",
+                            data: JSON.stringify(ids),
+                            async: false,
+                            success: function (r) {
+                                if (r.code == 0) {
+                                    layer.msg('删除成功', {icon: 6})
+                                    table.reload('tm');
+                                } else {
+                                    layer.msg(r.msg, {icon: 5})
+                                }
+                            }
+                        })
+                        layer.close(index);
+                    });
+                    break;
+                case 'pause':
+                    ids = checkSelectRows(data);
+                    if (ids.length == 0) {
+                        return;
+                    }
+                    optJob('暂停', 'pause', ids);
+                    break;
+                case 'resume':
+                    ids = checkSelectRows(data);
+                    if (ids.length == 0) {
+                        return;
+                    }
+                    optJob('恢复', 'resume', ids);
+                    break;
+                case 'run':
+                    ids = checkSelectRows(data);
+                    if (ids.length == 0) {
+                        return;
+                    }
+                    optJob('立即执行', 'run', ids);
+                    break;
+                case 'log':
+                    openLayer("日志列表", 'jobLogTab');
+                    table.render({
+                        elem: '#jobLog'
+                        , url: '../../sys/scheduleLog/list'
+                        , page: true
+                        , cols: [[
+                            {field: 'id', title: 'ID'}
+                            , {field: 'jobId', title: '任务ID'}
+                            , {field: 'beanName', title: 'bean名称'}
+                            , {field: 'params', title: '参数'}
+                            , {field: 'status', title: '状态', templet: function (d) {
+                                    return d.status === 0 ?
+                                        '<button type="button" class="layui-btn layui-btn-xs layui-btn-danger" lay-submit lay-filter="showError" data-error="'+d.error+'" >失败</button>' :
+                                        '<button type="button" class="layui-btn layui-btn-xs" style="cursor:default">正常</button>';
+                                }}
+                            , {field: 'times', title: '耗时(毫秒)'}
+                            , {field: 'createTime', title: '执行时间'}
+                        ]]
+                    });
+                    break;
+            }
+        });
+
+        // 操作任务
+        function optJob(name, type, ids) {
+            layer.confirm('确定' + name + '定时么', function (index) {
+                $.ajax({
+                    type: "post",
+                    url: "../../sys/schedule/" + type,
+                    contentType: "application/json",
+                    data: JSON.stringify(ids),
+                    async: false,
+                    success: function (r) {
+                        if (r.code == 0) {
+                            layer.msg(name + '成功', {icon: 6})
+                            table.reload('tm');
+                        } else {
+                            layer.msg(r.msg, {icon: 5})
+                        }
+                    }
+                })
+                layer.close(index);
+            });
+        }
+
+        // 保存修改
+        form.on('submit(submit)', function (data) {
+            $.ajax({
+                type: "post",
+                url: "../../sys/schedule/saveOrUpdate",
+                contentType: "application/json",
+                data: JSON.stringify(data.field),
+                async: false,
+                success: function (r) {
+                    if (r.code == 0) {
+                        layer.msg('保存成功', {icon: 6})
+                        table.reload('tm');
+                        layer.close(showIdx);
+                    } else {
+                        layer.msg(r.msg, {icon: 5})
+                    }
+                }
+            })
+            return false;
+        });
+
+        // 展示错误
+        form.on('submit(showError)', function () {
+            layer.open({
+                title:'失败信息',
+                closeBtn:0,
+                content: $(this).attr('data-error')
+            });
+            return false;
+        });
+    });
+</script>
+</body>
+</html>
