@@ -14,13 +14,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  */
 @Slf4j
 @RestControllerAdvice
-public class RRExceptionHandler {
+public class GExceptionHandler {
 
     /**
      * 处理自定义异常
      */
-    @ExceptionHandler(RRException.class)
-    public R handleRRException(RRException e) {
+    @ExceptionHandler(GException.class)
+    public R handleGException(GException e) {
         R r = new R();
         r.put("code", e.getCode());
         r.put("msg", e.getMessage());

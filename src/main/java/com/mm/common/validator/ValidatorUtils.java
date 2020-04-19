@@ -1,7 +1,7 @@
 package com.mm.common.validator;
 
 
-import com.mm.common.exception.RRException;
+import com.mm.common.exception.GException;
 
 import javax.validation.ConstraintViolation;
 import javax.validation.Validation;
@@ -27,14 +27,14 @@ public class ValidatorUtils {
      *
      * @param object 待校验对象
      * @param groups 待校验的组
-     * @throws RRException 校验不通过，则报RRException异常
+     * @throws GException 校验不通过，则报GException异常
      */
     public static void validateEntity(Object object, Class<?>... groups)
-            throws RRException {
+            throws GException {
         Set<ConstraintViolation<Object>> constraintViolations = validator.validate(object, groups);
         if (!constraintViolations.isEmpty()) {
             ConstraintViolation<Object> constraint = (ConstraintViolation<Object>) constraintViolations.iterator().next();
-            throw new RRException(constraint.getMessage());
+            throw new GException(constraint.getMessage());
         }
     }
 }
